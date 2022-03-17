@@ -1,0 +1,110 @@
+import folium
+from folium.plugins import MarkerCluster
+from flask import Flask
+from flask_restful import Resource, Api
+import pyodbc
+import json
+import collections
+
+app = Flask(__name__)
+api = Api(app)
+
+con_string = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};' \
+             r'DBQ="INSERT FILEPATH HERE";' \
+             r'autocommit=True;'                                                    # Insert filepath here
+conn = pyodbc.connect(con_string)
+cur = conn.cursor()
+cur.execute('SELECT * FROM Ispark_parking')
+
+
+class db(Resource):                                                                 
+    def get(self):
+        rows = cur.fetchall()
+        rowarray_list = []
+        for row in rows:
+            t = (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9])
+            rowarray_list.append(t)
+        j = json.dumps(rowarray_list)
+        objects_list = []
+        return rowarray_list
+api.add_resource(db, '/db')
+
+
+
+
+@app.route('/')
+def index():
+    start_coords = [41, 29]                                                         
+    map = folium.Map(location=start_coords, zoom_start=10, tiles="cartodbpositron") 
+
+
+    con_string = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};' \
+                 r'DBQ="INSERT FILEPATH HERE";'
+                                                                                    # Insert filepath
+                                                                                    
+    conn = pyodbc.connect(con_string)
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM Ispark_parking')
+
+    rows = cur.fetchall()
+    rowarray_list = []
+    for row in rows:
+        t = (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9])
+        rowarray_list.append(t)
+    j = json.dumps(rowarray_list)
+    objects_list = []
+    for row in rows:
+        d = collections.OrderedDict()
+        d["id"] = row[0]
+        d["Park Name"] = row[1]
+        d["Location"] = row[2]
+        d["Park Type"] = row[3]
+        d["Capacity"] = row[5]
+        d["Working Time"] = row[6]
+        d["County"] = row[7]
+        d["Longitude"] = row[8]
+        d["Latitude"] = row[9]
+        objects_list.append(d)
+
+    idd = []
+    park_name = []
+    loc_name = []
+    park_type = []
+    capacity = []
+    work_time = []
+    county_name = []
+    lon = []
+    lat = []
+    for i in range(len(rowarray_list)):
+        idd.append(rowarray_list[i][0])
+        park_name.append(rowarray_list[i][1])
+        loc_name.append(rowarray_list[i][2])
+        park_type.append(rowarray_list[i][3])
+        capacity.append(rowarray_list[i][5])
+        work_time.append(rowarray_list[i][6])
+        county_name.append(rowarray_list[i][7])
+        lon.append(rowarray_list[i][8])
+        lat.append(rowarray_list[i][9])
+
+    cluster = MarkerCluster(name="cluster").add_to(map)
+    for id, lt, ln, park, loc, type, cap, work, county in zip(idd, lat, lon, park_name, loc_name, park_type, capacity,
+                                                              work_time,county_name):
+        html = f'''
+            <p><strong>Id:</strong> <div contenteditable="true">{id}</div><p/>
+            <p><strong>Park Name:</strong> <div contenteditable="true">{park}</div><p/>
+            <p><strong>Location:</strong> <div contenteditable="true">{loc}</div><p/>
+            <p><strong>Park Type:</strong> <div contenteditable="true">{type}</div><p/>
+            <p><strong>Capacity:</strong> <div contenteditable="true">{cap}</div><p/>
+            <p><strong>Working Hours:</strong> <div contenteditable="true">{work}</div><p/>
+            <p><strong>County:</strong> <div contenteditable="true">{county}</div></p>
+            <p><strong>Longitude:</strong> <div contenteditable="true">{ln}</div></p>
+            <p><strong>Latitude:</strong> <div contenteditable="true">{lt}</div></p>
+            <input type="button" value="Kaydet" onclick="saveEdits()"/>'''
+        iframe = folium.IFrame(html, width=400, height=500)                                 # Pop-up details
+        popup = folium.Popup(iframe, max_width=500, )
+        marker = folium.Marker([lt, ln], popup=popup).add_to(cluster)                       # Marker clustering
+    return map._repr_html_()
+
+
+if __name__ == '__main__':
+    app.run(host='localhost', port=9874)
